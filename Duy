@@ -1,0 +1,149 @@
+import os
+import re
+import time
+import requests
+import pyfiglet
+import threading
+import random
+from termcolor import colored
+
+def clear():
+    os.system('cls' if os.name == 'nt' else 'clear')
+
+def banner():
+    ascii_banner = pyfiglet.figlet_format("   NATRA", font="slant")
+    print(colored(ascii_banner, 'cyan', attrs=['bold']))
+    print("=" * 60)
+    print(colored("       Tool Treo Mess By Natra Socola", 'white', attrs=['bold']))
+    print("=" * 60)
+
+def get_uid(cookie):
+    try:
+        return re.search(r'c_user=(\d+)', cookie).group(1)
+    except:
+        return '0'
+
+def get_fb_dtsg_jazoest(cookie, target_id):
+    try:
+        response = requests.get(
+            f'https://mbasic.facebook.com/privacy/touch/block/confirm/?bid={target_id}',
+            headers={ 'cookie': cookie, 'user-agent': 'Mozilla/5.0' }
+        ).text
+        fb_dtsg = re.search('name="fb_dtsg" value="([^"]+)"', response).group(1)
+        jazoest = re.search('name="jazoest" value="([^"]+)"', response).group(1)
+        return fb_dtsg, jazoest
+    except:
+        return None, None
+
+def get_eaag_token(cookie):
+    try:
+        res = requests.get(
+            'https://business.facebook.com/business_locations',
+            headers={ 'cookie': cookie, 'user-agent': 'Mozilla/5.0' }
+        )
+        return re.search(r'EAAG\w+', res.text).group()
+    except:
+        return None
+
+def send_message(idbox, fb_dtsg, jazoest, cookie, message_body):
+    try:
+        uid = get_uid(cookie)
+        timestamp = int(time.time() * 1000)
+        data = {
+            'thread_fbid': idbox,
+            'action_type': 'ma-type:user-generated-message',
+            'body': message_body,
+            'client': 'mercury',
+            'author': f'fbid:{uid}',
+            'timestamp': timestamp,
+            'offline_threading_id': str(timestamp),
+            'message_id': str(timestamp),
+            'source': 'source:chat:web',
+            '__user': uid,
+            '__a': '1',
+            '__req': '1b',
+            '__rev': '1015919737',
+            'fb_dtsg': fb_dtsg,
+            'jazoest': jazoest
+        }
+        headers = {
+            'Cookie': cookie,
+            'User-Agent': 'Mozilla/5.0',
+            'Content-Type': 'application/x-www-form-urlencoded'
+        }
+        response = requests.post('https://www.facebook.com/messaging/send/', data=data, headers=headers)
+        return response.status_code == 200
+    except Exception as e:
+        print(f'Lỗi gửi tới ID {idbox}: {e}')
+        return False
+
+def worker(cookie_data, id_list, message_list, base_delay):
+    cookie = cookie_data['cookie']
+
+    while True:
+        try:
+            fb_dtsg, jazoest = get_fb_dtsg_jazoest(cookie, id_list[0])
+            if not fb_dtsg or not jazoest:
+                print(f"Không lấy được fb_dtsg/jazoest")
+                time.sleep(60)
+                continue
+
+            for idbox in id_list:
+                for message_body in message_list:
+                    success = send_message(idbox, fb_dtsg, jazoest, cookie, message_body)
+                    if success:
+                        print(f"Gửi tin nhắn thành công tới: {idbox}")
+                    else:
+                        print(f"Gửi tin nhắn thất bại tới: {idbox}")
+                    
+                    delay = base_delay + random.uniform(-0.5, 0.5)
+                    if delay < 0:
+                        delay = 0
+                    time.sleep(delay)
+        except Exception as err:
+            print(f"Lỗi không xác định: {err}")
+            time.sleep(60)
+
+def treo_mess():
+    id_list = []
+    while True:
+        idbox = input(colored("Nhập ID Box (Nhập 'done' để dừng): ", 'yellow', attrs=['bold'])).strip()
+        if idbox.lower() in ['done']:
+            break
+        if idbox.isdigit():
+            id_list.append(idbox)
+
+    cookie_list = []
+    while True:
+        ck = input(colored("Nhập cookie (Nhập 'done' để dừng): ", 'yellow', attrs=['bold'])).strip()
+        if ck.lower() in ['done']:
+            break
+        if 'c_user=' in ck and 'xs=' in ck:
+            cookie_list.append(ck)
+
+    file_list = []
+    while True:
+        name_file = input(colored("Nhập file.txt (Nhập 'done' để dừng): ", 'yellow', attrs=['bold'])).strip()
+        if name_file.lower() in ['done']:
+            break
+        if name_file.endswith('.txt'):
+            file_list.append(name_file)
+
+    base_delay = int(input(colored('Nhập delay: ', 'yellow', attrs=['bold'])))
+
+    user_data_list = []
+    for index, ck in enumerate(cookie_list, 1):
+        try:
+            uid = get_uid(ck)
+            token = get_eaag_token(ck)
+
+            if token:
+                res = requests.get(
+                    f'https://graph.facebook.com/{uid}?fields=name&access_token={token}',
+                    headers={'cookie': ck, 'user-agent': 'Mozilla/5.0'}
+                ).json()
+                name = res.get('name', f'User_{index}')
+            else:
+                name = f'User_{index}'
+
+            user_data_list.append({'name': name, 'i
